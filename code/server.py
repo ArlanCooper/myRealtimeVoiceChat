@@ -946,7 +946,7 @@ if __name__ == "__main__":
     # Run the server without SSL
     if not USE_SSL:
         logger.info("🖥️▶️ Starting server without SSL.")
-        uvicorn.run("server:app", host="0.0.0.0", port=8035, log_config=None)
+        uvicorn.run("server:app", host="0.0.0.0", port=8036, log_config=None)
 
     else:
         logger.info("🖥️🔒 Attempting to start server with SSL.")
