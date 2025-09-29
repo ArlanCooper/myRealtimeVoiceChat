@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     logger.info("🖥️👋 Welcome to local real-time voice chat")
 
+# 音频重采样/拼接工具，将 TTS 原始 PCM 编码为 base64 供前端播放。
 from upsample_overlap import UpsampleOverlap
 from datetime import datetime
 from colors import Colors
@@ -50,6 +51,7 @@ if __name__ == "__main__":
 
 # Define the maximum allowed size for the incoming audio queue
 try:
+    # 服务端内部缓存音频数据块的最大队列长度,每一次客户端发来的音频包（含一段 PCM 数据）被解包后，会先放进 incoming_chunks 这个 asyncio 队列里等待后续 VAD/STT 处理。
     MAX_AUDIO_QUEUE_SIZE = int(os.getenv("MAX_AUDIO_QUEUE_SIZE", 50))
     if __name__ == "__main__":
         logger.info(f"🖥️⚙️ {Colors.apply('[PARAM]').blue} Audio queue size limit set to: {Colors.apply(str(MAX_AUDIO_QUEUE_SIZE)).blue}")
@@ -64,13 +66,15 @@ if sys.platform == "win32":
 
 #from handlerequests import LanguageProcessor
 #from audio_out import AudioOutProcessor
+# 全局单例，负责接收原始音频块 → VAD → STT → 触发回调。
 from audio_in import AudioInputProcessor
+# 全局单例，负责 LLM 调用、TTS 合成、打断逻辑、历史管理。
 from speech_pipeline_manager import SpeechPipelineManager
 from colors import Colors
 
-LANGUAGE = "en"
+LANGUAGE = "zh" # en改成中文
 # TTS_FINAL_TIMEOUT = 0.5 # unsure if 1.0 is needed for stability
-TTS_FINAL_TIMEOUT = 1.0 # unsure if 1.0 is needed for stability
+TTS_FINAL_TIMEOUT = 2.0 # unsure if 1.0 is needed for stability
 
 # --------------------------------------------------------------------
 # Custom no-cache StaticFiles
@@ -108,6 +112,7 @@ class NoCacheStaticFiles(StaticFiles):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
+    app.state 本身就是进程级单例——FastAPI 在一个进程里只创建一个 app 实例，因此挂在上面的对象天然就是全局唯一。
     Manages the application's lifespan, initializing and shutting down resources.
 
     Initializes global components like SpeechPipelineManager, Upsampler, and
@@ -287,6 +292,10 @@ async def process_incoming_data(ws: WebSocket, app: FastAPI, incoming_chunks: as
                     # Queue is full, drop the chunk and log a warning
                     logger.warning(
                         f"🖥️⚠️ Audio queue full ({current_qsize}/{MAX_AUDIO_QUEUE_SIZE}); dropping chunk. Possible lag."
+                    )
+                    logger.debug(
+                        f"🎤🔥 DROP qsize={current_qsize} max={MAX_AUDIO_QUEUE_SIZE} "
+                        f"timestamp_ms={timestamp_ms} pcm_bytes={len(metadata['pcm'])}"
                     )
 
             elif "text" in msg and msg["text"]:
@@ -515,6 +524,7 @@ async def send_tts_chunks(app: FastAPI, message_queue: asyncio.Queue, callbacks:
 
 # --------------------------------------------------------------------
 # Callback class to handle transcription events
+# 每个 WebSocket 连接私有的回调集合，保存连接级状态（打断、播放、TTS 标志等）。
 # --------------------------------------------------------------------
 class TranscriptionCallbacks:
     """
@@ -967,7 +977,7 @@ if __name__ == "__main__":
         uvicorn.run(
             "server:app",
             host="0.0.0.0",
-            port=8000,
+            port=8036,
             log_config=None,
             ssl_certfile=cert_file,
             ssl_keyfile=key_file,

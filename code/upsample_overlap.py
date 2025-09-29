@@ -5,13 +5,9 @@ from typing import Optional
 
 class UpsampleOverlap:
     """
-    Manages chunk-wise audio upsampling with overlap handling.
-
-    This class processes sequential audio chunks, upsamples them from 24kHz to 48kHz
-    using `scipy.signal.resample_poly`, and manages overlap between chunks to
-    mitigate boundary artifacts. The processed, upsampled audio segments are
-    returned as Base64 encoded strings. It maintains internal state to handle
-    the overlap correctly across calls.
+    把 24 kHz、16-bit 的小段 PCM 音频实时转成 48 kHz，并用“重叠-相加”思路消除块与块之间的拼接爆音，
+    最后以 Base64 字符串形式吐出，
+    供 WebSocket 直接下发给浏览器播放。
     """
     def __init__(self):
         """
